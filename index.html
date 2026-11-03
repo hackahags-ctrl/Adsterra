@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Latest video</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f1115;
+      color: #e8eaed;
+    }
+    h1 { text-align: center; font-size: 1.5rem; margin: 0 0 8px; }
+    .subtitle { text-align: center; color: #9aa0a6; font-size: 0.85rem; margin: 0 0 24px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      display: block;
+      position: relative;
+      background: #171a21;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+    }
+    .card:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 3px;
+    }
+
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: linear-gradient(135deg, #1c2029 0%, #12151b 100%);
+      overflow: hidden;
+    }
+    .video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+    }
+    .video-wrap.loaded video { opacity: 1; }
+
+    .video-wrap::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 50 50'><circle cx='25' cy='25' r='20' fill='none' stroke='%236b7280' stroke-width='4' stroke-dasharray='31.4 31.4'><animateTransform attributeName='transform' type='rotate' from='0 25 25' to='360 25 25' dur='0.9s' repeatCount='indefinite'/></circle></svg>")
+        center / 34px no-repeat;
+      opacity: 0.55;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .video-wrap.loaded::after,
+    .video-wrap.error::after { opacity: 0; }
+
+    .video-wrap.error::before {
+      content: "⚠video not loaded";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f87171;
+      font-size: 0.85rem;
+      background: #12151b;
+    }
+
+    .badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 2;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(4px);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .open-icon {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(4px);
+      color: #fff;
+      font-size: 0.85rem;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+    .card:hover .open-icon,
+    .card:focus-visible .open-icon {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .card-body { padding: 12px 14px 14px; }
+    .card-title { font-size: 0.95rem; font-weight: 600; margin: 0 0 4px; }
+    .card-desc { font-size: 0.78rem; color: #9aa0a6; margin: 0; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <h1>🎬 Latest video</h1>
+  <p class="subtitle">latest viral video</p>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    // ============================================================
+    // ⚙️ কনফিগারেশন
+    // ============================================================
+    const OPEN_IN_NEW_TAB = true;   // false করলে একই ট্যাবে খুলবে
+    const REDIRECT_URL = "https://www.google.com"; // 👈 সব কার্ড এখানে যাবে
+
+    // ============================================================
+    // 1) শুধু ভিডিও URL-এর তালিকা
+    //    ক্লিকের গন্তব্য সবগুলোর জন্য এক — উপরের REDIRECT_URL
+    // ============================================================
+    const VIDEOS = [
+  "1.mp4",
+  "2.mp4",
+  "3.mp4",
+  "4.mp4",
+  "5.mp4",
+  "6.mp4",
+  "7.mp4",
+  "8.mp4",
+  "9.mp4",
+];
+
+    const grid = document.getElementById("grid");
+
+    // ============================================================
+    // 2) কার্ড তৈরি — প্রতিটি কার্ডের href = REDIRECT_URL
+    // ============================================================
+    const cards = VIDEOS.map((src, i) => {
+      const n = String(i + 1).padStart(2, "0");
+
+      const a = document.createElement("a");
+      a.className = "card";
+      a.href = REDIRECT_URL;                      // 👈 সব কার্ড Google-এ যাবে
+      if (OPEN_IN_NEW_TAB) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      a.setAttribute("aria-label", `ভিডিও ${n} — Google-এ খুলুন`);
+
+      a.innerHTML = `
+        <div class="video-wrap">
+          <video
+            muted loop playsinline preload="none"
+            data-src="${src}"
+            data-index="${i}"
+          ></video>
+          <span class="badge">#${n}</span>
+          <span class="open-icon" aria-hidden="true">↗</span>
+        </div>
+        <div class="card-body">
+          <h3 class="card-title"> VIDEOS ${n}</h3>
+          <p class="card-desc">Full video</p>
+        </div>`;
+
+      grid.appendChild(a);
+      return a.querySelector("video");
+    });
+
+    // ============================================================
+    // 3) সিকোয়েনশিয়াল কিউ — একসাথে একটির বেশি ভিডিও লোড নয়
+    // ============================================================
+    const queue = [];
+    let isLoading = false;
+
+    function enqueue(video) {
+      if (video.dataset.queued === "1" || video.dataset.loaded === "1") return;
+      video.dataset.queued = "1";
+      queue.push(video);
+      processQueue();
+    }
+
+    function processQueue() {
+      if (isLoading || queue.length === 0) return;
+      isLoading = true;
+
+      const video = queue.shift();
+      const src = video.dataset.src;
+      const wrap = video.closest(".video-wrap");
+      if (!src) { isLoading = false; processQueue(); return; }
+
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        video.dataset.loaded = "1";
+        if (ok) {
+          wrap && wrap.classList.add("loaded");
+          if (isInView(video)) video.play().catch(() => {});
+        } else {
+          wrap && wrap.classList.add("error");
+        }
+        isLoading = false;
+        processQueue();
+      };
+
+      video.addEventListener("canplay", () => finish(true), { once: true });
+      video.addEventListener("loadeddata", () => finish(true), { once: true });
+      video.addEventListener("error", () => finish(false), { once: true });
+      setTimeout(() => finish(video.readyState >= 2), 8000);
+
+      video.preload = "auto";
+      video.src = src;
+      video.load();
+    }
+
+    // ============================================================
+    // 4) IntersectionObserver — শুধু কাছের ভিডিও লোড ও প্লে
+    // ============================================================
+    const inViewSet = new WeakSet();
+    const isInView = (v) => inViewSet.has(v);
+
+    const loadObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            enqueue(entry.target);
+            loadObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "300px 0px" }
+    );
+
+    const playObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const v = entry.target;
+          if (entry.isIntersecting) {
+            inViewSet.add(v);
+            if (v.dataset.loaded === "1") v.play().catch(() => {});
+          } else {
+            inViewSet.delete(v);
+            if (!v.paused) v.pause();
+          }
+        });
+      },
+      { threshold: 0.2 }
+    );
+
+    cards.forEach((v) => {
+      loadObserver.observe(v);
+      playObserver.observe(v);
+    });
+  </script>
+</body>
+</html>
